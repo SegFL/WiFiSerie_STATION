@@ -88,8 +88,18 @@ MenuNode* menuInit() {
         add_child(uart_menu, uart_set_baud);
         MenuNode* uart_set_buf = create_node("Cambiar Tamano de Buffer", '3', 23);
         add_child(uart_menu, uart_set_buf);
+/*
+
+    MenuNode* debug_menu = create_node(" DEBUG", '3', 30);
+    add_child(root, debug_menu);
+
+            MenuNode* debug_conection = create_node("Activar sniffer (CONSOLA-TCP)", '4', 31);
+            add_child(debug_menu, debug_conection);
+
+*/
 
 
+    
 
     return root;
 }

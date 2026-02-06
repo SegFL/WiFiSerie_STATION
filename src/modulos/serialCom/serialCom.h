@@ -5,6 +5,7 @@
 #include <errno.h>
 #include "../configuration/configuration.h"
 
+//Uart de debug
 #define UART_NUM UART_NUM_0
 
 

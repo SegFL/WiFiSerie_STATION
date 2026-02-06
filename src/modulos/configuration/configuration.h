@@ -10,8 +10,8 @@
 
 
 
-#define WIFI_SSID           "LABOE"
-#define WIFI_PASS           "LORTOTUA"
+#define WIFI_SSID           "RUTERVOLADOR"
+#define WIFI_PASS           "1234567890"
 #define TCP_SERVER_PORT     5000
 
 #define UART_BAUDRATE_DEF   115200

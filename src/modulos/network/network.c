@@ -7,7 +7,7 @@
 
 #define WIFI_CONNECTED_BIT BIT0
 
-
+bool snifferEnabled=false;
 
 bool isTcpSocketHealthy(int sock);
 
@@ -27,13 +27,21 @@ char rx_buffer[5120];
 bool connected=false;
 
 
-//
+//Indica si hay na conexion TCP activa o no
 bool isConnected(){
     connected=isTcpSocketHealthy(sock);
     return connected;
 }
 
-
+//Devuelve el estado del sniffer
+bool snifferIsEnabled(){
+    return snifferEnabled;
+}
+//Devuelve el estado del sniffer y lo cambia si es necesario
+bool snifferEnable(bool enable){
+    snifferEnabled=enable;
+    return snifferEnabled;
+}
 void networkInit() {
     xEventGroupWaitBits(
         wifi_event_group,
@@ -74,7 +82,7 @@ void printNetworkInfo(){
             "GW          : " IPSTR "\r\n"
             "MAC         : %02X:%02X:%02X:%02X:%02X:%02X\r\n"
             "TCP PORT    : %u\r\n"
-            "Estado      : %s\r\n"
+            "Estado TCP  : %s\r\n"
             "--------------------------------\r\n",
             IP2STR(&ip_info.ip),
             IP2STR(&ip_info.netmask),
@@ -227,7 +235,7 @@ void transmitUartTcp()
 
 
 
-        if (!isConnected() || sock < 0) {
+        if (!isConnected() || sock < 0 || !snifferEnabled) {
             vTaskDelay(pdMS_TO_TICKS(10));
             return;
         }
@@ -254,6 +262,9 @@ void transmitUartTcp()
                 len - total_sent,
                 0
             );
+            if(snifferEnabled==true){
+                ESP_LOGI(TAG, "Enviando datos por TCP: %.*s", len, uart_buffer);
+            }
 
             if (ret > 0) {
                 total_sent += ret;
@@ -304,3 +315,80 @@ bool isTcpSocketHealthy(int sock)
     // error == 0 → socket OK
     return (error == 0);
 }
+
+
+
+
+
+
+#define TCP_SERVER_PORT_FIXED 4000
+
+
+static const char *TAG_E = "TCP_EXAMPLE";
+
+void tcp_server_debuger_task(void *pvParameters)
+{
+    char rx_buffer[128];
+    char addr_str[64];
+    int sock = -1;
+
+    /* Espera a que haya WiFi */
+    while (!isConnected()) {
+        vTaskDelay(pdMS_TO_TICKS(10000));
+    }
+    ESP_LOGI(TAG_E, "WiFi conectado, iniciando TCP server");
+
+    int listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (listen_sock < 0) {
+        ESP_LOGE(TAG_E, "Error creando socket");
+        vTaskDelete(NULL);
+        return;
+    }
+
+    struct sockaddr_in server_addr = {
+        .sin_family = AF_INET,
+        .sin_port = htons(TCP_SERVER_PORT_FIXED),
+        .sin_addr.s_addr = htonl(INADDR_ANY)
+    };
+
+    if (bind(listen_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) != 0) {
+        ESP_LOGE(TAG_E, "Error en bind");
+        close(listen_sock);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    listen(listen_sock, 1);
+    ESP_LOGI(TAG_E, "TCP SERVER escuchando en puerto %d", TCP_SERVER_PORT_FIXED);
+
+    while (1) {
+        struct sockaddr_in client_addr;
+        socklen_t addr_len = sizeof(client_addr);
+
+        ESP_LOGI(TAG_E, "Esperando cliente TCP...");
+        sock = accept(listen_sock, (struct sockaddr *)&client_addr, &addr_len);
+        if (sock < 0) {
+            continue;
+        }
+
+        inet_ntop(AF_INET, &client_addr.sin_addr, addr_str, sizeof(addr_str));
+        ESP_LOGI(TAG_E, "Cliente conectado desde %s", addr_str);
+
+        while (1) {
+            int len = recv(sock, rx_buffer, sizeof(rx_buffer), 0);
+            if (len <= 0) {
+                break;
+            }
+
+            /* Ignora datos recibidos */
+            ESP_LOGI(TAG_E, "RX %d bytes -> %s", len, ESP32_NAME);
+
+            /* Envía mensaje fijo */
+            send(sock, ESP32_NAME, strlen(ESP32_NAME), 0);
+        }
+
+        ESP_LOGI(TAG_E, "Cliente desconectado");
+        close(sock);
+    }
+}
+

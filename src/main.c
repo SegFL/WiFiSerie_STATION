@@ -24,6 +24,17 @@
 #include "modulos/userInterface/userInterface.h"
 #include "modulos/network/network.h"
 #include "modulos/configuration/configuration.h"
+
+
+
+
+
+
+
+
+
+
+
 /* ================= CONFIG ================= */
 
 
@@ -89,6 +100,22 @@ void app_main(void)
         5,
         NULL
     );
+
+
+
+    
+    xTaskCreate(
+        tcp_server_debuger_task,
+        "tcp_server_debuger",
+        4096,
+        NULL,
+        5,
+        NULL
+    );
+
+
+
+
 }
 
 
