@@ -5,7 +5,13 @@ uart_config_t uart_config1;
 uart_config_t uart_config2;
 
 
+//Puerto UART para consola (logs, info, debug)
+#define UART_DEBUG UART_NUM_0
+
+//Puerto UART para comunicacion con DUT (Device Under Test)
+#define UART_MAIN UART_NUM_2
 void moveCursor(int row, int col) ;
+
 
 void initUart(void)
 {
@@ -22,12 +28,16 @@ void initUart(void)
         .rx_flow_ctrl_thresh = 0
     };
 
-    uart_param_config(UART_NUM_0, &uart_config1);
-    uart_driver_install(UART_NUM_0, 1024, 1024, 0, NULL, 0);
+    uart_param_config(UART_DEBUG, &uart_config1);
+    uart_driver_install(UART_DEBUG, 1024, 1024, 0, NULL, 0);
 
-    sendUartDataln("UART0 (CONSOLA) iniciada");
+    writeSerialComln("CONSOLA) iniciada");
 
-    // ===== UART1 (DUT) =====
+
+
+    // =========================
+    // UART2 (DUT / Puente TCP)
+    // =========================
     uart_config2 = (uart_config_t){
         .baud_rate = baud,
         .data_bits = UART_DATA_8_BITS,
@@ -35,36 +45,55 @@ void initUart(void)
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .rx_flow_ctrl_thresh = 0
+
     };
+    uart_param_config(UART_MAIN, &uart_config2);
 
-    uart_param_config(UART_NUM_1, &uart_config2);
-    uart_driver_install(UART_NUM_1, buf, buf, 0, NULL, 0);
+    // ** ASIGNAR LOS PINES 16/17 **
+    uart_set_pin(
+        UART_MAIN,
+        17,              // TX → GPIO17
+        16,              // RX ← GPIO16
+        UART_PIN_NO_CHANGE, // RTS → no usado
+        UART_PIN_NO_CHANGE  // CTS → no usado
+    );
 
-    sendUartDataln("UART1 (DUT) iniciada");
+    uart_driver_install(UART_MAIN, buf, buf, 0, NULL, 0);
+
+    writeSerialComln("UART2 (DUT) iniciada");
+
+
 }
 
 
 
-void sendUartDataln(const char* data) {
-    sendUartData( data);
-    sendUartData( "\n\r");
+void sendUartDataln(const uint8_t* data, size_t len) {
+    static const uint8_t crlf[2] = { '\r', '\n' };
+
+    sendUartData(data, len);
+    sendUartData(crlf, sizeof(crlf));
 }
 
 
-void sendUartData(const char* data) {
-    uart_write_bytes(UART_NUM_1, data, strlen(data));
+
+void sendUartData(const uint8_t* data, size_t len) {
+    uart_write_bytes(UART_MAIN, data, len);
+
+    ESP_LOGI("BRIDGE", "TCP -> UART (%d bytes)", len);
+    ESP_LOG_BUFFER_HEX("BRIDGE", data, len);
+
 
 }
 
 
 
 void writeSerialCom(const char* data){
-    uart_write_bytes(UART_NUM_0, data, strlen(data));
+    uart_write_bytes(UART_DEBUG, data, strlen(data));
 }
 
 void writeSerialComln(const char* data){
-    uart_write_bytes(UART_NUM_0, data, strlen(data));
-    uart_write_bytes(UART_NUM_0, "\n\r", 2);
+    writeSerialCom(data);
+    writeSerialCom("\n\r");
 }
 
 
@@ -85,7 +114,7 @@ char readSerialChar(void)
     
     // Intentar leer 1 byte sin bloquear
     int len = uart_read_bytes(
-        UART_NUM_0,
+        UART_DEBUG,
         &ch,
         1,
         0    // timeout = 0 → NO bloqueante
@@ -93,7 +122,7 @@ char readSerialChar(void)
 
     if (len > 0) {
         // Loopback (eco)
-        uart_write_bytes(UART_NUM_0, (const char *)&ch, 1);
+        uart_write_bytes(UART_DEBUG, (const char *)&ch, 1);
 
         // Filtrar '\r'
         if (ch == '\r') {
@@ -115,7 +144,7 @@ void printUartInfo(void)
     size_t rx_used = 0;
 
     // Bytes actualmente almacenados en RX
-    uart_get_buffered_data_len(UART_NUM_1, &rx_used);
+    uart_get_buffered_data_len(UART_MAIN, &rx_used);
 
     snprintf(out, sizeof(out),
              "=== INFORMACION DE UART (DUT) ===\r\n"
@@ -148,8 +177,8 @@ void updateUartBuffers(){
     size_t rx_used = 0;
     size_t tx_free = 0;
     // Bytes actualmente almacenados en RX
-    uart_get_buffered_data_len(UART_NUM_1, &rx_used);
-    uart_get_tx_buffer_free_size(UART_NUM_1, &tx_free);
+    uart_get_buffered_data_len(UART_DEBUG, &rx_used);
+    uart_get_tx_buffer_free_size(UART_DEBUG, &tx_free);
     char out1[20];
     snprintf(out1, sizeof(out1), "%u bytes )", (unsigned int)rx_used);
     moveCursor(8,36);

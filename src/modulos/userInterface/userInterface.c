@@ -189,6 +189,24 @@ void procesarDatos(const char* data, unsigned char length) {
         return;
     }
 
+    if(menu->id == 15){
+        // Habilitar secuencia de debug TCP con Y/N
+
+        if(strcasecmp(data, "y") == 0 || strcasecmp(data, "yes") == 0) {
+            enabledTCPDebugSequence(true);
+            writeSerialComln("Secuencia de debug TCP habilitada");
+
+        } else if(strcasecmp(data, "n") == 0 || strcasecmp(data, "no") == 0) {
+            enabledTCPDebugSequence(false);
+            writeSerialComln("Secuencia de debug TCP deshabilitada");
+
+        } else {
+            writeSerialComln("Valor invalido. Use 'Y' para habilitar o 'N' para deshabilitar");
+        }
+
+        return;
+    }
+
 
     /* ======= Cambiar UART ======*/
 
@@ -216,26 +234,38 @@ void procesarDatos(const char* data, unsigned char length) {
 
     if(menu->id == 23){
 
-    uint16_t buf_size;
-    if (sscanf(data, "%hu", &buf_size) != 1) {
-        writeSerialCom("Tamaño de buffer invalido\r\n");
+        uint16_t buf_size;
+        if (sscanf(data, "%hu", &buf_size) != 1) {
+            writeSerialCom("Tamaño de buffer invalido\r\n");
+            return;
+        }
+        if (buf_size < 128 || buf_size > 16384) {
+            writeSerialCom("Tamaño de buffer fuera de rango (128-16384)\r\n");
+            return;
+        }
+        setUartBufferSize(buf_size);
+        writeSerialCom("Tamaño de buffer guardado\r\n");
+        writeSerialCom("Reinicie para aplicar cambios\r\n");
         return;
-    }
-    if (buf_size < 128 || buf_size > 16384) {
-        writeSerialCom("Tamaño de buffer fuera de rango (128-16384)\r\n");
-        return;
-    }
-    setUartBufferSize(buf_size);
-    writeSerialCom("Tamaño de buffer guardado\r\n");
-    writeSerialCom("Reinicie para aplicar cambios\r\n");
-    return;
-
-
-
-
-
-
     
+    }
+
+    if(menu->id == 24){
+        // Habilitar secuencia de debug UART con Y/N
+
+        if(strcasecmp(data, "y") == 0 || strcasecmp(data, "yes") == 0) {
+            enabledUARTDebugSequence(true);
+            writeSerialComln("Secuencia de debug UART habilitada");
+
+        } else if(strcasecmp(data, "n") == 0 || strcasecmp(data, "no") == 0) {
+            enabledUARTDebugSequence(false);
+            writeSerialComln("Secuencia de debug UART deshabilitada");
+
+        } else {
+            writeSerialComln("Valor invalido. Use 'Y' para habilitar o 'N' para deshabilitar");
+        }
+
+        return;
     }
 
 
@@ -280,8 +310,10 @@ static void onEnterNode(MenuNode* n) {
             case 12: writeSerialComln("Ingrese el nuevo SSID y presione 'ENTER' para confirmar"); break;
             case 13: writeSerialComln("Ingrese la nueva contraseña y presione 'ENTER' para confirmar"); break;
             case 14: writeSerialComln("Ingrese el nuevo puerto TCP y presione 'ENTER' para confirmar");break;
+            case 15: writeSerialComln("Presione (Y/N) para habilitar/deshabilitar secuencia de debug TCP"); break;
             case 22: writeSerialComln("Ingrese el baudrate y presione 'ENTER' para confirmar"); break;
             case 23: writeSerialComln("Ingrese el tamaño del buffer y presione 'ENTER' para confirmar"); break;
+            case 24: writeSerialComln("Presione (Y/N) para habilitar/deshabilitar secuencia de debug UART"); break;
             default: break;
         }
     }
@@ -308,9 +340,10 @@ static bool nodeRequiresInput(int id) {
         case 12:  // Cambiar SSID
         case 13:  // Cambiar Password
         case 14:  // Cambiar Puerto TCP
+        case 15:  // Habilitar secuencia de debug TCP
         case 22:  // Cambiar Baudrate
         case 23:  // Cambiar Tamaño de Buffer UART
-        
+        case 24:  // Habilitar secuencia de debug UART
             return true;
         default:
             return false;

@@ -30,7 +30,7 @@
 
 
 /*======================================================= NOMBRE UNICO DEL DISPOSITIVO ===================================================*/
-#define ESP32_NAME     "ESP32-ASTERISCO1\n\r"
+#define ESP32_NAME     "ESP32-ASTERISCO3\n\r"
 /*========================================================================================================================================*/
 
 
@@ -63,3 +63,9 @@ bool isConnected();
 void transmitUartTcp();
 void printUartInfo();
 void tcp_server_debuger_task(void *pvParameters);
+void sendSequenceDebug(int sock);
+void enabledTCPDebugSequence(bool enabled);
+
+void enabledUARTDebugSequence(bool enabled);
+void sendUARTSequenceDebug();
+

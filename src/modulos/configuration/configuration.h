@@ -14,7 +14,7 @@
 #define WIFI_PASS           "1234567890"
 #define TCP_SERVER_PORT     5000
 
-#define UART_BAUDRATE_DEF   115200
+#define UART_BAUDRATE_DEF   9600
 #define UART_BUF_SIZE_DEF   1024
 #define TCP_BUF_SIZE_DEF    1024
 

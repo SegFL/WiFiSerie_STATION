@@ -10,13 +10,18 @@
 bool snifferEnabled=false;
 
 bool isTcpSocketHealthy(int sock);
-
+void sendUARTSequenceDebug();
+void sendTCPSequenceDebug(int sock);
 static const char *TAG = "ESP32_TCP_SERVER";
 static EventGroupHandle_t wifi_event_group;
 
 char addr_str[64];
 int sock=-1;
 
+//Flag de debug de TCP. Cuando esta activo, envia un numero del 0 al 9 cada 5 segundos por TCP. 
+//Sirve para verificar que el envio TCP funciona aunque no haya datos en la UART
+static bool TCPDebugSequence = false;             
+static bool UARTDebugSequence = false;
 
 
 
@@ -25,6 +30,9 @@ char uart_buffer[5120];
 char rx_buffer[5120];
 
 bool connected=false;
+
+
+
 
 
 //Indica si hay na conexion TCP activa o no
@@ -58,7 +66,7 @@ void networkInit() {
 void printNetworkInfo(){
 
 
-    char screen_buf[256];   // ajustá el tamaño según tu pantalla
+    char screen_buf[300];   // ajustá el tamaño según tu pantalla
 
     
     writeSerialComln("=== INFORMACION DE RED ===");
@@ -83,13 +91,15 @@ void printNetworkInfo(){
             "MAC         : %02X:%02X:%02X:%02X:%02X:%02X\r\n"
             "TCP PORT    : %u\r\n"
             "Estado TCP  : %s\r\n"
+            "Secuencia Debug TCP  : %s\r\n"
             "--------------------------------\r\n",
             IP2STR(&ip_info.ip),
             IP2STR(&ip_info.netmask),
             IP2STR(&ip_info.gw),
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
             getTCPServerPort(),
-            isConnected() ? "Conectado" : "Desconectado"
+            isConnected() ? "Conectado" : "Desconectado",
+            TCPDebugSequence ? "Habilitada" : "Deshabilitada"
     );
 
     writeSerialCom(screen_buf);
@@ -204,15 +214,39 @@ void tcp_server_task(void *pvParameters)
 
         connected=true;
         while (1) {
-            //Recibe x cantidad de datos, si no hay suficientes datos devuelve lo disponible. Para configurar no bloqueante ver el ultimo argumento https://man7.org/linux/man-pages/man2/recv.2.html
-            int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
-            if (len <= 0) break;
-            //send_uart()
-            rx_buffer[len] = 0;
-            //ESP_LOGI(TAG, "RX: %s", rx_buffer);
-            ESP_LOGI(TAG, "TCP -> UART (%d bytes)", len);
 
-            sendUartData(rx_buffer);
+            //Envia una sequencia de debug para saber si funciona la conexion TCP aunque no haya datos en la UART
+            if(TCPDebugSequence==true)
+                sendTCPSequenceDebug(sock);
+
+            //Recibe x cantidad de datos, si no hay suficientes datos devuelve lo disponible. Para configurar no bloqueante ver el ultimo argumento https://man7.org/linux/man-pages/man2/recv.2.html
+            int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, MSG_DONTWAIT);
+
+            if (len > 0) {
+
+                ESP_LOGI(TAG, "TCP -> UART (%d bytes)", len);
+                sendUartData((uint8_t*)rx_buffer, len);
+
+            }
+            else if (len == 0) {
+                // El cliente cerró conexión correctamente
+                break;
+            }
+            else { // len < 0
+                
+
+                if (errno != EWOULDBLOCK && errno != EAGAIN) {
+                    ESP_LOGE(TAG, "recv() error %d", errno);
+                    break; // error real
+                }
+
+                // Si es EWOULDBLOCK → simplemente no hay datos
+            }
+
+  
+            //Pongo un delay de 10ms para evitar estar el 100% del tiempo en este loop
+            vTaskDelay(pdMS_TO_TICKS(10)); 
+
         }
         connected=false;
         ESP_LOGI(TAG, "Cliente desconectado");
@@ -222,6 +256,11 @@ void tcp_server_task(void *pvParameters)
 }
 
 
+
+/*
+
+
+                */
 
 //Funcion que se encarga de enviar los datos recibidos por UART al cliente TCP conectado
 //Tiene implementado un envio parcial de datos y reintentos en caso de que el buffer TCP este lleno
@@ -235,14 +274,16 @@ void transmitUartTcp()
 
 
 
-        if (!isConnected() || sock < 0 || !snifferEnabled) {
+        if (!isConnected() || sock < 0) {
             vTaskDelay(pdMS_TO_TICKS(10));
             return;
         }
 
+        if(UARTDebugSequence==true)
+            sendUARTSequenceDebug();
         //No bloqueante, si no hay datos disponibles retorna 0 y sigue
         int len = uart_read_bytes(
-            UART_NUM_1,
+            UART_NUM_2,
             uart_buffer,
             sizeof(uart_buffer),
             0
@@ -262,9 +303,9 @@ void transmitUartTcp()
                 len - total_sent,
                 0
             );
-            if(snifferEnabled==true){
-                ESP_LOGI(TAG, "Enviando datos por TCP: %.*s", len, uart_buffer);
-            }
+
+            ESP_LOGI(TAG, "Enviando datos por TCP: %.*s", len, uart_buffer);
+            
 
             if (ret > 0) {
                 total_sent += ret;
@@ -383,6 +424,7 @@ void tcp_server_debuger_task(void *pvParameters)
             /* Ignora datos recibidos */
             ESP_LOGI(TAG_E, "RX %d bytes -> %s", len, ESP32_NAME);
 
+
             /* Envía mensaje fijo */
             send(sock, ESP32_NAME, strlen(ESP32_NAME), 0);
         }
@@ -392,3 +434,64 @@ void tcp_server_debuger_task(void *pvParameters)
     }
 }
 
+
+//Envia una secuencia de debug para saber que la conexion TCP funciona aunque 
+//no se recivan datos por la UART. Envia un numero del 0 al 9 cada 5 segundos
+//Se envia el /t pq si no TCP/WiFi intenta optimizar el envio de datos ( funciona igual pero 
+// se imprimen mensajes de info en la consola)
+void sendTCPSequenceDebug(int sock)
+{
+    static uint8_t counter = 0;
+    static TickType_t lastTick = 0;
+
+    const TickType_t period = pdMS_TO_TICKS(1000);
+
+    if (!TCPDebugSequence)
+        return;
+
+    TickType_t now = xTaskGetTickCount();
+
+    if ((now - lastTick) >= period)
+    {
+        lastTick = now;
+
+        char tx[4];
+        int len = snprintf(tx, sizeof(tx), "%d\t", counter);
+
+        send(sock, tx, len, 0);
+
+        counter = (counter + 1) % 10;
+    }
+}
+
+void enabledTCPDebugSequence(bool enabled) {
+    TCPDebugSequence = enabled;
+}
+
+void sendUARTSequenceDebug()
+{
+    static uint8_t counter = 0;
+    static TickType_t lastTick = 0;
+
+    const TickType_t period = pdMS_TO_TICKS(1000);
+
+    if (!UARTDebugSequence)
+        return;
+
+    TickType_t now = xTaskGetTickCount();
+
+    if ((now - lastTick) >= period)
+    {
+        lastTick = now;
+
+        char tx[4];
+        int len = snprintf(tx, sizeof(tx), "%d\t", counter);
+
+        sendUartData((const uint8_t*)tx, len);
+        counter = (counter + 1) % 10;
+    }
+}
+
+void enabledUARTDebugSequence(bool enabled) {
+    UARTDebugSequence = enabled;
+}

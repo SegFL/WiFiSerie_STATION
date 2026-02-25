@@ -10,8 +10,8 @@
 
 
 void initUart();
-void sendUartDataln(const char* data) ;
-void sendUartData(const char* data) ;
+void sendUartDataln(const uint8_t* data, size_t len) ;
+void sendUartData(const uint8_t* data, size_t len)  ;
 void writeSerialComln(const char* data);
 void writeSerialCom(const char* data);
 void clearScreen();

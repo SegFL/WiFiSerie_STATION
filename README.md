@@ -45,3 +45,5 @@ Conexion TCP
 
    Para 1- transmitUartTcp agregar un envio de datos una vez se leen por la UART, el falg deberia ser una OR ya que si no se tiene WIFI igual
    es preferible poder debugear(la UART1 deberia poder funcionar tenga wifi o no)
+
+   3- Agregar una forma para que se muestre el mismo menu usando el puerto TCP 4000

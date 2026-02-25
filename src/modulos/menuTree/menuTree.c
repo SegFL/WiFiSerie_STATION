@@ -77,6 +77,10 @@ MenuNode* menuInit() {
         add_child(tcp_menu, tcp_set_pass);
         MenuNode* tcp_set_port = create_node("Cambiar Puerto TCP", '4', 14);
         add_child(tcp_menu, tcp_set_port);
+        MenuNode* tcp_debug_sequence = create_node("Habilitar secuencia de debug TCP", '5', 15);
+        add_child(tcp_menu, tcp_debug_sequence);
+
+
 
     /* ===== UART ===== */
     MenuNode* uart_menu = create_node("UART", '2', 20);
@@ -88,6 +92,9 @@ MenuNode* menuInit() {
         add_child(uart_menu, uart_set_baud);
         MenuNode* uart_set_buf = create_node("Cambiar Tamano de Buffer", '3', 23);
         add_child(uart_menu, uart_set_buf);
+        MenuNode* uart_debug_sequence = create_node("Habilitar secuencia de debug UART", '4', 24);
+        add_child(uart_menu, uart_debug_sequence);
+        
 /*
 
     MenuNode* debug_menu = create_node(" DEBUG", '3', 30);
