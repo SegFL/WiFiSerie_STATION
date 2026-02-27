@@ -56,7 +56,7 @@ void userInterfaceInit(){
 void userInterfaceUpdate() {
     if (menu == NULL) return;
 
-    char charReceived = readSerialChar();
+    char charReceived = readUserChar();
     if(charReceived== GO_BACK){ // ESCAPE
         menuUpdate(charReceived, &menu);
         

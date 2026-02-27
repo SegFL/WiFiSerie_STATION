@@ -1,6 +1,6 @@
 
 #include "serialCom.h"
-
+#include "../network/network.h"
 uart_config_t uart_config1;
 uart_config_t uart_config2;
 
@@ -87,8 +87,14 @@ void sendUartData(const uint8_t* data, size_t len) {
 
 
 
-void writeSerialCom(const char* data){
+void writeSerialCom(const char* data)
+{
     uart_write_bytes(UART_DEBUG, data, strlen(data));
+
+    if (networkDebugIsConnected())
+    {
+        networkDebugSend(data, strlen(data));
+    }
 }
 
 void writeSerialComln(const char* data){
@@ -108,33 +114,31 @@ void clearScreen() {
 
 
 //Funcion para leer de a un caracter de la CONSOLA
-char readSerialChar(void)
+
+// Función para leer un caracter de la consola o TCP
+char readUserChar(void)
 {
     uint8_t ch;
-    
-    // Intentar leer 1 byte sin bloquear
-    int len = uart_read_bytes(
-        UART_DEBUG,
-        &ch,
-        1,
-        0    // timeout = 0 → NO bloqueante
-    );
 
+    // 1️⃣ Intentar leer de UART
+    int len = uart_read_bytes(UART_DEBUG, &ch, 1, 0);
     if (len > 0) {
-        // Loopback (eco)
         uart_write_bytes(UART_DEBUG, (const char *)&ch, 1);
-
-        // Filtrar '\r'
-        if (ch == '\r') {
-            return '\0';
-        }
-
+        if (ch == '\r') return '\0';
         return (char)ch;
     }
 
+    // 2️⃣ Intentar leer del buffer TCP debug
+    if (networkDebugReadByte(&ch)) {
+        // Opcional: eco por UART también
+        uart_write_bytes(UART_DEBUG, (const char *)&ch, 1);
+        if (ch == '\r') return '\0';
+        return (char)ch;
+    }
+
+    // 3️⃣ No hay datos disponibles
     return '\0';
 }
-
 
 void printUartInfo(void)
 {
@@ -198,3 +202,7 @@ void moveCursor(int row, int col) {
     writeSerialCom(buffer);
 
 }
+
+
+
+

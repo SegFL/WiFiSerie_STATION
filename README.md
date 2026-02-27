@@ -47,3 +47,11 @@ Conexion TCP
    es preferible poder debugear(la UART1 deberia poder funcionar tenga wifi o no)
 
    3- Agregar una forma para que se muestre el mismo menu usando el puerto TCP 4000
+
+    6-Agregar coidgo para que se haga una secuencia de debug para saber a que ip/esp32 se esta "pingenando" , hacer titilar un led o similar
+
+
+7-Corregir que cuando se corta el wifi el led sigue titilando como si tuviese una conexion WiFi valida
+
+   Si lo apagas se conecta la la ip reservada a esa mac, la ip puede o no estar en el rango de dhcp.
+

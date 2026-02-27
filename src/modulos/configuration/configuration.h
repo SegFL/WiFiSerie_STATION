@@ -10,10 +10,14 @@
 
 
 
-#define WIFI_SSID           "RUTERVOLADOR"
-#define WIFI_PASS           "1234567890"
-#define TCP_SERVER_PORT     5000
+#define LED_RUN GPIO_NUM_2   
 
+
+
+#define WIFI_SSID           "ROUTER"
+#define WIFI_PASS           "00112233"
+#define TCP_SERVER_PORT     5000
+#define TCP_DEBUG_PORT      4000
 #define UART_BAUDRATE_DEF   9600
 #define UART_BUF_SIZE_DEF   1024
 #define TCP_BUF_SIZE_DEF    1024

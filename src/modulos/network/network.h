@@ -6,13 +6,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 
 
-#include "esp_wifi.h"
+
 #include "esp_event.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
@@ -24,6 +23,10 @@
 
 #include "driver/uart.h"
 #include "esp_log.h"
+
+
+
+
 
 
 
@@ -48,6 +51,8 @@
 
 
 
+
+
 void networkInit();
 void wifi_event_handler(void *arg,
                                esp_event_base_t event_base,
@@ -56,7 +61,7 @@ void wifi_event_handler(void *arg,
 
 void printNetworkInfo();
 void wifi_init_sta(void);
-void tcp_server_task(void *pvParameters);
+void transmitTcpUart();
 
 
 bool isConnected();
@@ -65,7 +70,17 @@ void printUartInfo();
 void tcp_server_debuger_task(void *pvParameters);
 void sendSequenceDebug(int sock);
 void enabledTCPDebugSequence(bool enabled);
-
+bool isWifiConnected(void);
 void enabledUARTDebugSequence(bool enabled);
 void sendUARTSequenceDebug();
 
+
+
+
+//Funciones relacionados a la conexion TCP de debug
+void networkDebugInit(void);
+void networkDebugPoll(void);
+
+bool networkDebugIsConnected(void);
+void networkDebugSend(const char *data, int len);
+bool networkDebugReadByte(uint8_t* ch);

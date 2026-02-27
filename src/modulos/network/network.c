@@ -4,17 +4,60 @@
 #include "nvs_flash.h"
 #include "esp_log.h"
 #include "../configuration/configuration.h"
+#include <fcntl.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+
+
+#include "esp_wifi.h"
+#include "esp_event.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "esp_netif.h"
+
+#include "lwip/sockets.h"
+#include "lwip/netdb.h"
+#include "lwip/inet.h"
+
+#include "driver/uart.h"
+#include "esp_log.h"
+
+#include "../network/network.h"
 #define WIFI_CONNECTED_BIT BIT0
 
+
+#define TCP_DEBUG_BUFFER_SIZE 1024
+
+static uint8_t tcp_debug_buffer[TCP_DEBUG_BUFFER_SIZE];
+static size_t tcp_debug_buffer_head = 0;
+static size_t tcp_debug_buffer_tail = 0;
+
+
+#define TCP_DEBUG_RX_BUFFER_SIZE 1024
+
+static uint8_t tcp_debug_rx_buffer[TCP_DEBUG_RX_BUFFER_SIZE];
+static size_t tcp_debug_rx_head = 0;
+static size_t tcp_debug_rx_tail = 0;
 bool snifferEnabled=false;
 
 bool isTcpSocketHealthy(int sock);
 void sendUARTSequenceDebug();
 void sendTCPSequenceDebug(int sock);
+static void tcpDebugBufferPush(const uint8_t* data, size_t len);
+
 static const char *TAG = "ESP32_TCP_SERVER";
 static EventGroupHandle_t wifi_event_group;
 
+
+
+/* Variables para la conexion TCP de debug*/
+static int debug_listen_sock = -1;
+static int debug_client_sock = -1;
+
+
+/*------------------------------------*/
 char addr_str[64];
 int sock=-1;
 
@@ -156,6 +199,7 @@ void wifi_init_sta(void)
     esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL);
     esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL);
 
+
     wifi_config_t wifi_config = { 0 };
     strcpy((char *)wifi_config.sta.ssid, getWifiSSID());
     strcpy((char *)wifi_config.sta.password, getWifiPass());
@@ -173,14 +217,13 @@ void wifi_init_sta(void)
 
 /* ================= TCP SERVER ================= */
 
-void tcp_server_task(void *pvParameters)
+void transmitTcpUart()
 {
 
 
 
 
-    wifi_init_sta();
-    networkInit(); 
+
 
     int listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
     if (listen_sock < 0) {
@@ -257,10 +300,7 @@ void tcp_server_task(void *pvParameters)
 
 
 
-/*
 
-
-                */
 
 //Funcion que se encarga de enviar los datos recibidos por UART al cliente TCP conectado
 //Tiene implementado un envio parcial de datos y reintentos en caso de que el buffer TCP este lleno
@@ -268,20 +308,16 @@ void tcp_server_task(void *pvParameters)
 //se puede quedar bloqueado indefinidamente
 void transmitUartTcp()
 {
-
-
-
-
-
-
+    while (1)
+    {
         if (!isConnected() || sock < 0) {
             vTaskDelay(pdMS_TO_TICKS(10));
-            return;
+            continue;
         }
 
-        if(UARTDebugSequence==true)
+        if (UARTDebugSequence == true)
             sendUARTSequenceDebug();
-        //No bloqueante, si no hay datos disponibles retorna 0 y sigue
+
         int len = uart_read_bytes(
             UART_NUM_2,
             uart_buffer,
@@ -290,7 +326,8 @@ void transmitUartTcp()
         );
 
         if (len <= 0) {
-            return;
+            vTaskDelay(pdMS_TO_TICKS(5));
+            continue;
         }
 
         int total_sent = 0;
@@ -304,20 +341,15 @@ void transmitUartTcp()
                 0
             );
 
-            ESP_LOGI(TAG, "Enviando datos por TCP: %.*s", len, uart_buffer);
-            
-
             if (ret > 0) {
                 total_sent += ret;
             }
             else if (ret < 0) {
 
                 if (errno == EWOULDBLOCK || errno == ENOMEM) {
-                    // Buffer TCP lleno → esperar
                     vTaskDelay(pdMS_TO_TICKS(10));
                     continue;
                 } else {
-                    ESP_LOGE(TAG, "send() error fatal (%d), cerrando conexion", errno);
                     connected = false;
                     close(sock);
                     sock = -1;
@@ -325,8 +357,7 @@ void transmitUartTcp()
                 }
             }
         }
-
-        ESP_LOGI(TAG, "UART -> TCP (%d bytes)", total_sent);
+    }
 }
 
 
@@ -494,4 +525,143 @@ void sendUARTSequenceDebug()
 
 void enabledUARTDebugSequence(bool enabled) {
     UARTDebugSequence = enabled;
+}
+
+
+bool isWifiConnected(void)
+{
+    if (wifi_event_group == NULL)
+        return false;
+
+    EventBits_t bits = xEventGroupGetBits(wifi_event_group);
+    return (bits & WIFI_CONNECTED_BIT) != 0;
+}
+
+
+
+void networkDebugInit(void)
+{
+    if (!isWifiConnected()) {
+        ESP_LOGW(TAG, "WiFi no conectada, no se inicia debug server");
+        return;
+    }
+
+    debug_listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (debug_listen_sock < 0) {
+        ESP_LOGE(TAG, "Error creando debug socket");
+        return;
+    }
+
+    struct sockaddr_in server_addr = {
+        .sin_family = AF_INET,
+        .sin_port = htons(TCP_DEBUG_PORT),
+        .sin_addr.s_addr = htonl(INADDR_ANY)
+    };
+
+    if (bind(debug_listen_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) != 0) {
+        ESP_LOGE(TAG, "Error bind debug socket");
+        close(debug_listen_sock);
+        debug_listen_sock = -1;
+        return;
+    }
+
+    listen(debug_listen_sock, 1);
+
+    // no bloqueante
+    int flags = fcntl(debug_listen_sock, F_GETFL, 0);
+    fcntl(debug_listen_sock, F_SETFL, flags | O_NONBLOCK);
+
+    ESP_LOGI(TAG, "TCP DEBUG escuchando en puerto %d", TCP_DEBUG_PORT);
+}
+
+
+void networkDebugPoll(void)
+{
+    if (debug_listen_sock < 0)
+        return;
+
+    // Si no hay cliente, intentar aceptar
+    if (debug_client_sock < 0)
+    {
+        struct sockaddr_in client_addr;
+        socklen_t addr_len = sizeof(client_addr);
+
+        int sock = accept(debug_listen_sock, (struct sockaddr *)&client_addr, &addr_len);
+
+        if (sock >= 0)
+        {
+            debug_client_sock = sock;
+
+            int flags = fcntl(debug_client_sock, F_GETFL, 0);
+            fcntl(debug_client_sock, F_SETFL, flags | O_NONBLOCK);
+
+            ESP_LOGI(TAG, "Cliente DEBUG conectado");
+        }
+    }
+    else
+    {
+        // Chequear si sigue vivo
+        char tmp[128];
+        int ret = recv(debug_client_sock, tmp, sizeof(tmp), MSG_DONTWAIT);
+        if (ret > 0) {
+            tcpDebugBufferPush((uint8_t*)tmp, ret);
+        }
+        if (ret == 0)
+        {
+            ESP_LOGI(TAG, "Cliente DEBUG desconectado");
+            close(debug_client_sock);
+            debug_client_sock = -1;
+        }
+        else if (ret < 0 && errno != EWOULDBLOCK && errno != EAGAIN)
+        {
+            close(debug_client_sock);
+            debug_client_sock = -1;
+        }
+    }
+}
+
+bool networkDebugIsConnected(void)
+{
+    return debug_client_sock >= 0;
+}
+
+void networkDebugSend(const char *data, int len)
+{
+    if (debug_client_sock < 0)
+        return;
+
+    int ret = send(debug_client_sock, data, len, 0);
+
+    if (ret < 0)
+    {
+        close(debug_client_sock);
+        debug_client_sock = -1;
+    }
+}
+
+
+
+static void tcpDebugBufferPush(const uint8_t* data, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        size_t next = (tcp_debug_rx_head + 1) % TCP_DEBUG_RX_BUFFER_SIZE;
+        if (next != tcp_debug_rx_tail) {  // buffer no lleno
+            tcp_debug_rx_buffer[tcp_debug_rx_head] = data[i];
+            tcp_debug_rx_head = next;
+        } else {
+            // buffer lleno → descartar datos o manejar overflow
+            break;
+        }
+    }
+}
+
+
+bool networkDebugReadByte(uint8_t* ch)
+{
+    if (tcp_debug_rx_head == tcp_debug_rx_tail)
+        return false;  // buffer vacío
+
+    *ch = tcp_debug_rx_buffer[tcp_debug_rx_tail];
+    tcp_debug_rx_tail = (tcp_debug_rx_tail + 1) % TCP_DEBUG_RX_BUFFER_SIZE;
+    return true;
 }

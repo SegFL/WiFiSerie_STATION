@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <stdbool.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -18,6 +19,7 @@
 
 #include "driver/uart.h"
 #include "esp_log.h"
+#include "driver/gpio.h"
 
 #include "modulos/serialCom/serialCom.h"
 #include "modulos/menuTree/menuTree.h"
@@ -35,26 +37,26 @@
 
 
 
-/* ================= CONFIG ================= */
 
-
-
-/* ========================================= */
-
-
-/* ================= NETWORK INFO ================= */
 
 
 
 static const char *TAG = "ESP32_TCP_SERVER2";
 
+void ledsInit();
+void led_task(void *pvParameters);
+void comunication_task(void *pvParameters);
+
+void ui_task(void * pvParameters)
+{
 
 
-void task2(void * pvParameters){
-    while(1){
+    while(1)
+    {
+        networkDebugPoll();   
         userInterfaceUpdate();
-        transmitUartTcp();
-        vTaskDelay(pdMS_TO_TICKS(100));
+
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
 
@@ -75,16 +77,24 @@ void app_main(void)
     //Carga cofiguracion desde NVS como SSID, PASS, etc.
     loadConfiguration();
 
+    ledsInit();
 
 
     initUart();
+    wifi_init_sta();
+    // Si no tengo conexion no hago nada mas
+    while (!isWifiConnected()) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    networkDebugInit();
     userInterfaceInit();
 
 
-
+    //Tarea asociada a todo lo relacionado con la interfaz de usuario como
+    //la UART0, el menu y la conexion TCP de debug (port 4000)
     xTaskCreate(
-        task2,
-        "task2",
+        ui_task,
+        "ui_task",
         4096,
         NULL,
         5,
@@ -92,28 +102,40 @@ void app_main(void)
     );
 
 
+
+
+
     xTaskCreate(
-        tcp_server_task,
-        "tcp_server",
+        comunication_task,
+        "comunication_task",
         4096,
         NULL,
         5,
         NULL
     );
-
-
 
     
+
+
     xTaskCreate(
-        tcp_server_debuger_task,
-        "tcp_server_debuger",
-        4096,
+        led_task,
+        "led_task",
+        1024,
         NULL,
         5,
         NULL
     );
 
 
+
+
+
+
+
+    while (1)
+    {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 
 
 }
@@ -121,15 +143,59 @@ void app_main(void)
 
 
 
+void ledsInit()
+{
+    gpio_reset_pin(LED_RUN);
+    gpio_set_direction(LED_RUN, GPIO_MODE_OUTPUT);
+
+}
+
+
+
+void led_task(void *pvParameters)
+{
+    while (1) {
+        if (isWifiConnected())
+                {
+                    // ----- ESTADO CONECTADO -----
+                    gpio_set_level(LED_RUN, 0);
+                    vTaskDelay(pdMS_TO_TICKS(500));
+
+                    gpio_set_level(LED_RUN, 1);
+                    vTaskDelay(pdMS_TO_TICKS(125));
+
+                    gpio_set_level(LED_RUN, 0);
+                    vTaskDelay(pdMS_TO_TICKS(125));
+
+                    gpio_set_level(LED_RUN, 1);
+                    vTaskDelay(pdMS_TO_TICKS(125));
+
+                    gpio_set_level(LED_RUN, 0);
+                    vTaskDelay(pdMS_TO_TICKS(125));
+                }
+                else
+                {
+                    // ----- ESTADO NORMAL -----
+                    gpio_set_level(LED_RUN, 1);
+                    vTaskDelay(pdMS_TO_TICKS(500));
+
+                    gpio_set_level(LED_RUN, 0);
+                    vTaskDelay(pdMS_TO_TICKS(500));
+                }
+            }
+}
 
 
 
 
 
 
+void comunication_task(void *pvParameters){
 
+    while(true){
+        transmitTcpUart();
+        transmitUartTcp();
 
-
-
-
+    }
+}
 
