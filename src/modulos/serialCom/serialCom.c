@@ -52,8 +52,8 @@ void initUart(void)
     // ** ASIGNAR LOS PINES 16/17 **
     uart_set_pin(
         UART_MAIN,
-        17,              // TX → GPIO17
-        16,              // RX ← GPIO16
+        16,                //TX
+        17,              //RX
         UART_PIN_NO_CHANGE, // RTS → no usado
         UART_PIN_NO_CHANGE  // CTS → no usado
     );

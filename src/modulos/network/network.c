@@ -310,10 +310,12 @@ void transmitUartTcp()
 {
     while (1)
     {
+
         if (!isConnected() || sock < 0) {
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
+
 
         if (UARTDebugSequence == true)
             sendUARTSequenceDebug();
@@ -328,6 +330,10 @@ void transmitUartTcp()
         if (len <= 0) {
             vTaskDelay(pdMS_TO_TICKS(5));
             continue;
+        }
+
+        if (len > 0) {
+            ESP_LOGI("BRIDGE", "UART recibio %d bytes", len); // ← y esto
         }
 
         int total_sent = 0;

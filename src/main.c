@@ -45,8 +45,9 @@ static const char *TAG = "ESP32_TCP_SERVER2";
 
 void ledsInit();
 void led_task(void *pvParameters);
-void comunication_task(void *pvParameters);
+void tcp_to_uart_task(void *pvParameters) ;
 
+void uart_to_tcp_task(void *pvParameters);
 void ui_task(void * pvParameters)
 {
 
@@ -105,15 +106,9 @@ void app_main(void)
 
 
 
-    xTaskCreate(
-        comunication_task,
-        "comunication_task",
-        4096,
-        NULL,
-        5,
-        NULL
-    );
-
+// ✅ Reemplazar por estas dos
+xTaskCreate(tcp_to_uart_task, "tcp_to_uart", 4096, NULL, 5, NULL);
+xTaskCreate(uart_to_tcp_task, "uart_to_tcp", 4096, NULL, 5, NULL);
     
 
 
@@ -190,12 +185,12 @@ void led_task(void *pvParameters)
 
 
 
-void comunication_task(void *pvParameters){
 
-    while(true){
-        transmitTcpUart();
-        transmitUartTcp();
 
-    }
+void tcp_to_uart_task(void *pvParameters) {
+    transmitTcpUart();   // tiene su propio while(1)
 }
 
+void uart_to_tcp_task(void *pvParameters) {
+    transmitUartTcp();   // tiene su propio while(1)
+}
