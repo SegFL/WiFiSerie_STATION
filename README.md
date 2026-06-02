@@ -59,3 +59,7 @@ Conexion TCP
 
 
 8-Corregir que cuando el equipo esta fucnionando y se accede a la consola de debug se cortan las comunicaciones, o sea se reinicia el micro creo
+
+Agregar mas funcionalidades al led: Cuando tengo una conexion tcp activa 
+
+Agregar para que responga al ping
