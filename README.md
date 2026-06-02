@@ -55,3 +55,7 @@ Conexion TCP
 
    Si lo apagas se conecta la la ip reservada a esa mac, la ip puede o no estar en el rango de dhcp.
 
+
+
+
+8-Corregir que cuando el equipo esta fucnionando y se accede a la consola de debug se cortan las comunicaciones, o sea se reinicia el micro creo
