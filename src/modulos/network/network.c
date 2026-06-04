@@ -541,8 +541,17 @@ bool isWifiConnected(void)
 
     EventBits_t bits = xEventGroupGetBits(wifi_event_group);
     return (bits & WIFI_CONNECTED_BIT) != 0;
-}
 
+
+
+}
+//Devuelve el estado de la conexion TCP con el DUT
+bool isTcpConnected(){
+    // connected ya se actualiza en transmitTcpUart() cuando el cliente se desconecta
+    // Solo validamos adicionalmente que el sock sea válido
+    if (sock < 0) connected = false;
+    return connected;
+}
 
 
 void networkDebugInit(void)

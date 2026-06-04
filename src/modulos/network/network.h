@@ -71,6 +71,7 @@ void tcp_server_debuger_task(void *pvParameters);
 void sendSequenceDebug(int sock);
 void enabledTCPDebugSequence(bool enabled);
 bool isWifiConnected(void);
+bool isTcpConnected();
 void enabledUARTDebugSequence(bool enabled);
 void sendUARTSequenceDebug();
 

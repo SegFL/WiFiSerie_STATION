@@ -150,7 +150,7 @@ void ledsInit()
 void led_task(void *pvParameters)
 {
     while (1) {
-        if (isWifiConnected())
+        if (isTcpConnected())
                 {
                     // ----- ESTADO CONECTADO -----
                     gpio_set_level(LED_RUN, 0);

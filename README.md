@@ -59,7 +59,26 @@ Conexion TCP
 
 
 8-Corregir que cuando el equipo esta fucnionando y se accede a la consola de debug se cortan las comunicaciones, o sea se reinicia el micro creo
+------
+static SemaphoreHandle_t uart_debug_mutex = NULL;
 
+void initUart(void) {
+    uart_debug_mutex = xSemaphoreCreateMutex();
+    // ... resto igual
+}
+
+void writeSerialCom(const char* data) {
+    if (uart_debug_mutex && xSemaphoreTake(uart_debug_mutex, pdMS_TO_TICKS(100))) {
+        uart_write_bytes(UART_DEBUG, data, strlen(data));
+        xSemaphoreGive(uart_debug_mutex);
+    }
+
+    if (networkDebugIsConnected()) {
+        networkDebugSend(data, strlen(data));
+    }
+}
+
+-----
 Agregar mas funcionalidades al led: Cuando tengo una conexion tcp activa 
 
 Agregar para que responga al ping
